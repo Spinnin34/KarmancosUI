@@ -1,236 +1,234 @@
-# KarmancosUI Library
+# KarmancosUI 📦
 
-Una librería avanzada para crear interfaces gráficas (GUIs) en plugins de Minecraft usando Paper/Spigot.
+> Librería avanzada para crear GUIs profesionales en plugins de Minecraft
 
-## Características
+[![Build Status](https://github.com/Spinnin34/KarmancosUI/workflows/Maven%20Build/badge.svg)](https://github.com/Spinnin34/KarmancosUI/actions)
+[![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://www.java.com/)
+[![Paper Version](https://img.shields.io/badge/paper-1.21.4+-red.svg)](https://papermc.io/)
+[![Maven Central](https://img.shields.io/badge/maven%20central-v1.0.0-brightgreen)](https://github.com/Spinnin34/KarmancosUI/releases)
 
-- ✅ **BaseGui** - Clase base para crear GUIs personalizadas
-- ✅ **PagedGui** - GUIs con sistema de paginación
-- ✅ **ScrollGui** - GUIs con desplazamiento
-- ✅ **AnimatedGui** - GUIs con animaciones frame-by-frame
-- ✅ **TabGui** - GUIs con pestañas
-- ✅ **VirtualInventory** - Inventarios virtuales
-- ✅ **GuiBuilder** - Constructor fluido para crear GUIs fácilmente
-- ✅ **Auto-update system** - Sistema de actualización automática de elementos
-- ✅ **Event handling** - Manejo de eventos de clic, drag, apertura y cierre
+## 🎯 Características
 
-## Instalación
+- ✨ **BaseGui** - GUI base con sistema de items
+- 📄 **PagedGui** - Paginación automática de contenido
+- 📜 **ScrollGui** - Desplazamiento horizontal/vertical
+- 🎬 **AnimatedGui** - Animaciones frame-by-frame
+- 📑 **TabGui** - Sistema de pestañas
+- 🔄 **Auto-Update** - Actualización automática de items
+- 🎯 **EventHandling** - Manejo completo de eventos
+- 🧩 **ItemBuilder** - Constructor fluido para items
+- 📦 **Thread-Safe** - Operaciones concurrentes seguras
 
-### Opción 1: Usando Maven
+## 🚀 Inicio Rápido
 
-Agrega lo siguiente a tu `pom.xml`:
+### 1. Agregar Dependencia
 
 ```xml
-<dependency>
-    <groupId>p.karmancos</groupId>
-    <artifactId>karmancosui</artifactId>
-    <version>1.0.0</version>
-</dependency>
+<repositories>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
+</repositories>
+
+<dependencies>
+    <dependency>
+        <groupId>com.github.Spinnin34</groupId>
+        <artifactId>KarmancosUI</artifactId>
+        <version>v1.0.0</version>
+    </dependency>
+</dependencies>
 ```
 
-### Opción 2: Copiar JAR manualmente
-
-1. Descarga `karmancosui-1.0.0.jar` de la carpeta `target`
-2. Agrega el JAR a la carpeta `libs` de tu proyecto
-3. Configura tu IDE para que reconozca la librería
-
-## Uso Rápido
-
-### Crear un GUI básico
+### 2. Crear tu Primer GUI
 
 ```java
 import p.karmancos.gui.*;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 
-public class MiGui extends BaseGui {
-    public MiGui() {
-        super(3, "Mi Primer GUI");
-    }
-    
+public class MiGui {
     public static void abrir(Player player) {
-        MiGui gui = new MiGui();
+        // Crear GUI
+        BaseGui gui = new BaseGui(3, "&bMi GUI") {};
         
-        // Agregar items
-        gui.setItem(0, new GuiItem(
+        // Crear y agregar item
+        GuiItem item = new GuiItem(
             new ItemBuilder(Material.DIAMOND).setDisplayName("&bDiamante").build(),
-            event -> {
-                player.sendMessage("¡Hiciste clic en el diamante!");
-            }
-        ));
+            event -> player.sendMessage("¡Hiciste clic!")
+        );
         
+        gui.setItem(0, item);
         gui.open(player);
     }
 }
 ```
 
-### Usar GuiBuilder
+### 3. Usar en tu Plugin
 
 ```java
-BaseGui gui = new GuiBuilder()
-    .setRows(6)
-    .setTitle("Mi GUI")
-    .setPaged(true)
-    .build();
+@Command(name = "gui")
+public void openGui(Player player) {
+    MiGui.abrir(player);
+}
+```
 
-gui.setItem(0, new GuiItem(
-    new ItemBuilder(Material.GOLD_BLOCK).setDisplayName("&6Oro").build(),
-    event -> handleClick(event)
-));
+## 📚 Documentación
 
+| Archivo | Descripción |
+|---------|------------|
+| [QUICKSTART.md](QUICKSTART.md) | Guía de inicio en 5 minutos |
+| [README.md](README.md) | Documentación completa |
+| [EXAMPLES.java](EXAMPLES.java) | 7 ejemplos de código |
+| [PUBLISH.md](PUBLISH.md) | Cómo publicar y distribuir |
+| [STATUS.md](STATUS.md) | Estado actual del proyecto |
+| [CHANGELOG.md](CHANGELOG.md) | Historial de cambios |
+
+## 📖 Ejemplos
+
+### GUI Básico
+```java
+BaseGui gui = new BaseGui(6, "Mi GUI");
+gui.setItem(0, new GuiItem(itemStack, event -> {...}));
 gui.open(player);
 ```
 
-### Crear un GUI con paginación
-
+### GUI con Paginación
 ```java
-List<GuiItem> items = new ArrayList<>();
-// ... agregar items
-
 PagedGui gui = PagedGui.builder()
     .setRows(6)
     .setTitle("Items Paginados")
     .setContent(items)
-    .setStructure(
-        "# # # # # # # # #",
-        "# . . . . . . . #",
-        "# . . . . . . . #",
-        "# . . . . . . . #",
-        "# . . . . . . . #",
-        "# # < P > # # # #"
-    )
-    .addIngredient('#', new GuiItem(
-        new ItemBuilder(Material.GRAY_STAINED_GLASS_PANE).setDisplayName("&7").build()
-    ))
-    .addIngredient('<', new GuiItem(
-        new ItemBuilder(Material.ARROW).setDisplayName("&7Anterior").build()
-    ))
-    .addIngredient('>', new GuiItem(
-        new ItemBuilder(Material.ARROW).setDisplayName("&7Siguiente").build()
-    ))
     .build();
-
 gui.open(player);
 ```
 
-### Crear un GUI animado
-
+### GUI Animado
 ```java
-AnimatedGui gui = new AnimatedGui(plugin, 3, "GUI Animado");
-
-// Frame 0
-List<GuiItem> frame0 = new ArrayList<>();
-frame0.add(new GuiItem(new ItemBuilder(Material.DIAMOND).setDisplayName("&bFrame 1").build()));
-gui.addFrame(0, frame0, 20); // 20 ticks de duración
-
-// Frame 1
-List<GuiItem> frame1 = new ArrayList<>();
-frame1.add(new GuiItem(new ItemBuilder(Material.GOLD_BLOCK).setDisplayName("&6Frame 2").build()));
-gui.addFrame(1, frame1, 20);
-
+AnimatedGui gui = new AnimatedGui(plugin, 3, "Animado");
+gui.addFrame(0, frames1, 20);
+gui.addFrame(1, frames2, 20);
 gui.setLoop(true);
-gui.setOnAnimationComplete(() -> {
-    System.out.println("Animación completada");
-});
-
 gui.open(player);
 ```
 
-## Componentes Principales
-
-### GuiItem
-Representa un item en el GUI con soporte para eventos de clic.
-
+### Llenar Áreas
 ```java
-GuiItem item = new GuiItem(itemStack, event -> {
-    // Manejar clic
-    event.setCancelled(true);
-    event.getWhoClicked().sendMessage("¡Click!");
-});
+GuiItem border = new GuiItem(new ItemBuilder(Material.GRAY_STAINED_GLASS_PANE).build());
+
+gui.fillBorder(border);           // Borde completo
+gui.fillRow(0, border);           // Primera fila
+gui.fillColumn(4, border);        // Columna central
+gui.fillArea(1, 1, 3, 8, border); // Área personalizada
 ```
 
-### ItemBuilder
-Constructor fluido para crear ItemStacks fácilmente.
-
-```java
-ItemStack item = new ItemBuilder(Material.DIAMOND)
-    .setDisplayName("&bMi Diamante")
-    .setLore("&7Descripción")
-    .setAmount(1)
-    .addEnchantment(Enchantment.UNBREAKING, 3)
-    .build();
-```
-
-### Actualizaciones Automáticas
-
-```java
-BaseGui gui = ...;
-
-// Habilitar actualización automática cada 20 ticks
-gui.setAutoUpdate(true, 20L);
-
-// Establecer prioridad de actualización
-gui.setUpdatePriority(UpdatePriority.HIGH);
-
-// Actualizar un slot específico
-gui.updateSlot(5);
-
-// Actualizar para un jugador específico
-gui.updateSlot(5, player);
-```
-
-## API Completa
+## 🎓 API Completa
 
 ### BaseGui
-- `setItem(slot, GuiItem)`
-- `setItem(row, col, GuiItem)`
-- `removeItem(slot)`
-- `getItem(slot)`
-- `updateSlot(slot)`
-- `updateForPlayer(player)`
-- `setAutoUpdate(boolean, intervalTicks)`
-- `open(player)`
-- `close(player)`
-- `fill(GuiItem)`
-- `fillBorder(GuiItem)`
-- `fillRow(row, GuiItem)`
-- `fillColumn(col, GuiItem)`
-- `fillArea(startRow, startCol, endRow, endCol, GuiItem)`
-- `setCloseAction(Consumer)`
-- `setOpenAction(Consumer)`
-- `setOutsideClickAction(Consumer)`
-- `setPlayerInventoryClickAction(Consumer)`
-- `setDragAction(Consumer)`
-- `setPreventClose(boolean)`
-- `setAllowPlayerInventoryClick(boolean)`
-- `setAllowDrag(boolean)`
+```java
+// Items
+gui.setItem(slot, item)
+gui.setItem(row, col, item)
+gui.removeItem(slot)
+gui.getItem(slot)
 
-## Requisitos
+// Layout
+gui.fill(item)
+gui.fillBorder(item)
+gui.fillRow(row, item)
+gui.fillColumn(col, item)
+gui.fillArea(startRow, startCol, endRow, endCol, item)
+
+// Actualización
+gui.updateSlot(slot)
+gui.setAutoUpdate(true, 20L)
+gui.updateForPlayer(player)
+
+// Eventos
+gui.setCloseAction(consumer)
+gui.setOpenAction(consumer)
+gui.setOutsideClickAction(consumer)
+gui.setPlayerInventoryClickAction(consumer)
+gui.setDragAction(consumer)
+
+// Control
+gui.open(player)
+gui.close(player)
+gui.setPreventClose(boolean)
+gui.setAllowPlayerInventoryClick(boolean)
+gui.setAllowDrag(boolean)
+```
+
+## ⚙️ Requisitos
 
 - **Java 21+**
 - **Paper/Spigot 1.21.4+**
+- **Maven 3.6+** (opcional, para compilar)
 
-## Estructura de Archivos Generados
+## 🔧 Compilar Localmente
 
+```bash
+git clone https://github.com/Spinnin34/KarmancosUI.git
+cd KarmancosUI
+mvn clean package
 ```
-target/
-├── karmancosui-1.0.0.jar           # JAR compilado (usar en plugins)
-├── karmancosui-1.0.0-sources.jar   # Código fuente
-└── karmancosui-1.0.0-javadoc.jar   # Documentación
+
+Los JARs generados estarán en `target/`:
+- `karmancosui-1.0.0.jar` - JAR compilado
+- `karmancosui-1.0.0-sources.jar` - Código fuente
+- `karmancosui-1.0.0-javadoc.jar` - Documentación
+
+## 📦 Distribución
+
+### Con JitPack (Recomendado)
+La librería se publica automáticamente en [JitPack](https://jitpack.io) desde GitHub.
+
+### Con Maven Local
+```bash
+mvn install:install-file \
+  -Dfile=target/karmancosui-1.0.0.jar \
+  -DgroupId=p.karmancos \
+  -DartifactId=karmancosui \
+  -Dversion=1.0.0 \
+  -Dpackaging=jar
 ```
 
-## Próximos Pasos
+## 🐛 Reportar Problemas
 
-Para usar esta librería en tus plugins:
+Si encuentras un bug o tienes una sugerencia:
+1. Abre un [Issue](https://github.com/Spinnin34/KarmancosUI/issues)
+2. Describe el problema con detalles
+3. Incluye versión de Java y Paper
 
-1. **Maven**: Agrega la dependencia al `pom.xml`
-2. **Gradle**: Agrega a `build.gradle`
-3. **Manual**: Copia el JAR a la carpeta `libs`
+## 📄 Licencia
 
-## Licencia
+MIT License - Ver LICENSE para más detalles
 
-MIT License
+## 👨‍💻 Autor
 
-## Soporte
+Creado por **Spinnin34**
 
-Para reportar problemas o sugerencias, contacta con el desarrollador.
+## 🙏 Contribuciones
+
+¡Las contribuciones son bienvenidas! Por favor:
+1. Fork el repositorio
+2. Crea una rama (git checkout -b feature/mi-feature)
+3. Commit los cambios (git commit -m 'Add mi-feature')
+4. Push a la rama (git push origin feature/mi-feature)
+5. Abre un Pull Request
+
+## 📞 Soporte
+
+- 📖 **Documentación**: Ver [README.md](README.md)
+- 🚀 **Inicio Rápido**: Ver [QUICKSTART.md](QUICKSTART.md)
+- 💡 **Ejemplos**: Ver [EXAMPLES.java](EXAMPLES.java)
+- 📋 **Estado**: Ver [STATUS.md](STATUS.md)
+
+---
+
+**Versión:** 1.0.0  
+**Última Actualización:** 9 de Marzo de 2026  
+**Estado:** ✅ Completada y Funcional
+
+Hecho con ❤️ para la comunidad de Minecraft
 

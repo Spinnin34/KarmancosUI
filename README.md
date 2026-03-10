@@ -2,6 +2,7 @@
 
 > Librería avanzada para crear GUIs profesionales en plugins de Minecraft
 
+[![](https://jitpack.io/v/Spinnin34/KarmancosUI.svg)](https://jitpack.io/#Spinnin34/KarmancosUI)
 [![Build Status](https://github.com/Spinnin34/KarmancosUI/workflows/Maven%20Build/badge.svg)](https://github.com/Spinnin34/KarmancosUI/actions)
 [![Java Version](https://img.shields.io/badge/java-21+-blue.svg)](https://www.java.com/)
 [![Paper Version](https://img.shields.io/badge/paper-1.21.4+-red.svg)](https://papermc.io/)
@@ -231,4 +232,5 @@ Creado por **Spinnin34**
 **Estado:** ✅ Completada y Funcional
 
 Hecho con ❤️ para la comunidad de Minecraft
+
 

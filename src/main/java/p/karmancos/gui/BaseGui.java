@@ -30,11 +30,14 @@ import java.util.function.Consumer;
  * - Drag event handling
  * - Structure-based layout support
  * - PreventClose with next-tick reopen
+ * - InputSlot support — interactive slots where players can place/take items with anti-dupe protection
  */
 public abstract class BaseGui implements InventoryHolder {
 
     protected Inventory inventory;
     protected final Map<Integer, GuiItem> items;
+    /** Interactive input slots indexed by their slot number. */
+    protected final Map<Integer, InputSlot> inputSlots = new LinkedHashMap<>();
     protected Component title;
     protected int rows;
     protected InventoryType type;
@@ -256,39 +259,106 @@ public abstract class BaseGui implements InventoryHolder {
         items.clear();
         inventory.clear();
         slotUpdateTimestamps.clear();
+        // Re-render input slot placeholders so they are not wiped
+        renderInputSlots();
     }
 
-    // ─── Structure support ──────────────────────────────────────
+    // ─── InputSlot management ────────────────────────────────────
 
     /**
-     * Apply a structure layout to the GUI.
+     * Register an {@link InputSlot} in this GUI.
+     * An InputSlot is a slot where the player can freely place and take items,
+     * with optional validation, placeholder and change callbacks.
      * <p>
-     * Each character in the structure maps to an ingredient.
-     * Spaces between chars are ignored.
+     * The slot must not overlap with a normal {@link GuiItem} slot — if it does,
+     * the InputSlot takes priority and the GuiItem is removed.
      *
-     * @param structure     Array of strings (e.g. "# # # # # # # # #")
-     * @param ingredients   Map of char to GuiItem
-     * @param contentMarker Character that marks content slots (returned)
-     * @return array of slot indices matching the content marker
+     * @param inputSlot the slot to register
+     * @return this (fluent)
      */
-    public int[] applyStructure(String[] structure, Map<Character, GuiItem> ingredients, char contentMarker) {
-        List<Integer> contentSlots = new ArrayList<>();
-        int slot = 0;
+    public BaseGui addInputSlot(InputSlot inputSlot) {
+        int s = inputSlot.getSlot();
+        if (s < 0 || s >= inventory.getSize()) return this;
+        // Remove any static GuiItem that was occupying the same slot
+        items.remove(s);
+        inputSlots.put(s, inputSlot);
+        inventory.setItem(s, inputSlot.getRenderedItem());
+        return this;
+    }
 
-        for (String row : structure) {
-            String cleaned = row.replace(" ", "");
-            for (int i = 0; i < cleaned.length() && slot < inventory.getSize(); i++) {
-                char c = cleaned.charAt(i);
-                if (c == contentMarker) {
-                    contentSlots.add(slot);
-                } else if (ingredients.containsKey(c)) {
-                    setItem(slot, ingredients.get(c));
-                }
-                slot++;
-            }
+    /**
+     * Remove the {@link InputSlot} at the given slot index.
+     * Any item currently held in that slot is dropped — see {@link #removeInputSlot(int, Player)}.
+     *
+     * @param slot the inventory slot index
+     */
+    public void removeInputSlot(int slot) {
+        InputSlot is = inputSlots.remove(slot);
+        if (is != null) {
+            inventory.setItem(slot, null);
         }
+    }
 
-        return contentSlots.stream().mapToInt(Integer::intValue).toArray();
+    /**
+     * Remove the {@link InputSlot} at the given slot index, returning the stored item to the player.
+     *
+     * @param slot   the inventory slot index
+     * @param player the player that receives the item (if any)
+     */
+    public void removeInputSlot(int slot, Player player) {
+        InputSlot is = inputSlots.remove(slot);
+        if (is != null) {
+            ItemStack stored = is.getCurrentItem();
+            if (stored != null && player != null) {
+                Map<Integer, ItemStack> leftover = player.getInventory().addItem(stored);
+                // Drop leftovers at feet to prevent item loss
+                leftover.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+            }
+            inventory.setItem(slot, null);
+        }
+    }
+
+    /**
+     * Get the {@link InputSlot} registered at the given index, or {@code null}.
+     *
+     * @param slot the inventory slot index
+     */
+    public InputSlot getInputSlot(int slot) {
+        return inputSlots.get(slot);
+    }
+
+    /**
+     * Return an unmodifiable view of all registered InputSlots.
+     */
+    public Collection<InputSlot> getInputSlots() {
+        return Collections.unmodifiableCollection(inputSlots.values());
+    }
+
+    /**
+     * Clear every InputSlot, returning all stored items to the given player.
+     * Pass {@code null} to drop items at the player's last location instead.
+     *
+     * @param player the player that receives the items, or {@code null} to discard
+     */
+    public void clearInputSlots(Player player) {
+        for (InputSlot is : inputSlots.values()) {
+            ItemStack stored = is.getCurrentItem();
+            if (stored != null) {
+                if (player != null) {
+                    Map<Integer, ItemStack> leftover = player.getInventory().addItem(stored);
+                    leftover.values().forEach(item -> player.getWorld().dropItemNaturally(player.getLocation(), item));
+                }
+                is.setCurrentItemSilent(null);
+            }
+            inventory.setItem(is.getSlot(), is.getRenderedItem());
+        }
+    }
+
+    /** Re-render every InputSlot in the inventory (placeholder or real item). */
+    protected void renderInputSlots() {
+        for (InputSlot is : inputSlots.values()) {
+            inventory.setItem(is.getSlot(), is.getRenderedItem());
+        }
     }
 
     // ─── Open / Close ───────────────────────────────────────────
@@ -303,6 +373,8 @@ public abstract class BaseGui implements InventoryHolder {
                 inventory.setItem(entry.getKey(), itemStack);
             }
         }
+        // Render input slots (real item or placeholder) on top of static items
+        renderInputSlots();
 
         viewers.add(player.getUniqueId());
         player.openInventory(inventory);
@@ -359,11 +431,14 @@ public abstract class BaseGui implements InventoryHolder {
         if (!viewers.contains(player.getUniqueId())) return;
 
         for (Map.Entry<Integer, GuiItem> entry : items.entrySet()) {
+            // Skip slots occupied by an InputSlot so we don't overwrite the player's item
+            if (inputSlots.containsKey(entry.getKey())) continue;
             ItemStack itemStack = entry.getValue().getItemStack(player);
             if (itemStack != null) {
                 inventory.setItem(entry.getKey(), itemStack);
             }
         }
+        renderInputSlots();
     }
 
     /**
@@ -470,13 +545,44 @@ public abstract class BaseGui implements InventoryHolder {
      */
     public void handleClick(InventoryClickEvent event) {
         if (event.getClickedInventory() == inventory) {
-            event.setCancelled(true);
             int slot = event.getSlot();
+
+            // ── InputSlot takes priority ──────────────────────────
+            InputSlot inputSlot = inputSlots.get(slot);
+            if (inputSlot != null) {
+                inputSlot.handleClick(event);
+                // Sync rendered item back to inventory after the interaction
+                inventory.setItem(slot, inputSlot.getRenderedItem());
+                return;
+            }
+
+            // ── Normal GuiItem ────────────────────────────────────
+            event.setCancelled(true);
             GuiItem item = items.get(slot);
             if (item != null) {
                 item.handleClick(event);
             }
         } else if (event.getClickedInventory() == event.getWhoClicked().getInventory()) {
+            // Shift-click from player inventory: if it would land on an InputSlot, redirect there
+            if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
+                ItemStack moved = event.getCurrentItem();
+                if (moved != null && !moved.getType().isAir()) {
+                    // Find first InputSlot that accepts this item
+                    for (InputSlot is : inputSlots.values()) {
+                        if (is.isEmpty()) {
+                            // Synthesize a fake click event is not possible cleanly,
+                            // so we handle it manually here.
+                            event.setCancelled(true);
+                            boolean accepted = tryDepositIntoInputSlot(is, moved, (Player) event.getWhoClicked());
+                            if (accepted) {
+                                event.setCurrentItem(null); // remove from player inv
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
+
             if (!allowPlayerInventoryClick) {
                 event.setCancelled(true);
             }
@@ -491,12 +597,29 @@ public abstract class BaseGui implements InventoryHolder {
     }
 
     /**
+     * Attempt to deposit {@code item} into {@code inputSlot} on behalf of {@code player}.
+     * Returns {@code true} if the item was accepted.
+     */
+    private boolean tryDepositIntoInputSlot(InputSlot inputSlot, ItemStack item, Player player) {
+        if (item == null || item.getType().isAir()) return false;
+        // Run the InputSlot's validator (package-private accessor)
+        java.util.function.Predicate<ItemStack> validator = inputSlot.getValidator();
+        if (validator != null && !validator.test(item)) return false;
+
+        inputSlot.setCurrentItemSilent(item);
+        inventory.setItem(inputSlot.getSlot(), inputSlot.getRenderedItem());
+        inputSlot.fireOnChangeExternal(player, item);
+        return true;
+    }
+
+    /**
      * Handle drag events.
      */
     public void handleDrag(InventoryDragEvent event) {
-        if (!allowDrag) {
-            for (int slot : event.getRawSlots()) {
-                if (slot < inventory.getSize()) {
+        // Block drags that touch any InputSlot or (if !allowDrag) any GUI slot
+        for (int slot : event.getRawSlots()) {
+            if (slot < inventory.getSize()) {
+                if (inputSlots.containsKey(slot) || !allowDrag) {
                     event.setCancelled(true);
                     return;
                 }
@@ -523,6 +646,20 @@ public abstract class BaseGui implements InventoryHolder {
                     }
                 }, 1L);
                 return;
+            }
+        }
+
+        // Return items stored in InputSlots to the player who closed the GUI
+        if (!inputSlots.isEmpty()) {
+            for (InputSlot is : inputSlots.values()) {
+                ItemStack stored = is.getCurrentItem();
+                if (stored != null) {
+                    Map<Integer, ItemStack> leftover = player.getInventory().addItem(stored);
+                    leftover.values().forEach(item ->
+                            player.getWorld().dropItemNaturally(player.getLocation(), item));
+                    is.setCurrentItemSilent(null);
+                    inventory.setItem(is.getSlot(), is.getRenderedItem());
+                }
             }
         }
 

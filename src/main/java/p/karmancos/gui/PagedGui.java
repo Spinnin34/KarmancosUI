@@ -9,6 +9,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+
+import org.bukkit.event.inventory.InventoryClickEvent;
 
 /**
  * PagedGui with fluent builder, structure support, and lazy loading.
@@ -44,6 +47,8 @@ public class PagedGui extends BaseGui {
     private int nextPageSlot = -1;
     private int pageInfoSlot = -1;
     private int maxPage = -1;
+    private boolean alwaysShowPrevButton = false;
+    private boolean alwaysShowNextButton = false;
 
     // ─── Constructors ───────────────────────────────────────────
 
@@ -111,9 +116,68 @@ public class PagedGui extends BaseGui {
 
     public void setNavigation(int prevSlot, GuiItem prevItem, int nextSlot, GuiItem nextItem) {
         this.previousPageSlot = prevSlot;
-        this.previousPageItem = prevItem;
         this.nextPageSlot = nextSlot;
-        this.nextPageItem = nextItem;
+        setPreviousPageItem(prevItem);
+        setNextPageItem(nextItem);
+    }
+
+    /**
+     * Set the previous page button item and slot.
+     * The navigation action is automatically applied; any existing action on the item is preserved and called first.
+     */
+    public void setPreviousPageItem(int slot, GuiItem item) {
+        this.previousPageSlot = slot;
+        setPreviousPageItem(item);
+    }
+
+    /**
+     * Set the next page button item and slot.
+     * The navigation action is automatically applied; any existing action on the item is preserved and called first.
+     */
+    public void setNextPageItem(int slot, GuiItem item) {
+        this.nextPageSlot = slot;
+        setNextPageItem(item);
+    }
+
+    /**
+     * Replace the previous page GuiItem. Navigation action is auto-wired.
+     */
+    public void setPreviousPageItem(GuiItem item) {
+        if (item == null) { this.previousPageItem = null; return; }
+        // Wire navigation action: wraps existing action so navigation always fires
+        Consumer<InventoryClickEvent> originalAction = item.getAction();
+        item.onClick(event -> {
+            if (originalAction != null) originalAction.accept(event);
+            previousPage();
+        });
+        this.previousPageItem = item;
+    }
+
+    /**
+     * Replace the next page GuiItem. Navigation action is auto-wired.
+     */
+    public void setNextPageItem(GuiItem item) {
+        if (item == null) { this.nextPageItem = null; return; }
+        Consumer<InventoryClickEvent> originalAction = item.getAction();
+        item.onClick(event -> {
+            if (originalAction != null) originalAction.accept(event);
+            nextPage();
+        });
+        this.nextPageItem = item;
+    }
+
+    /**
+     * Whether to always show the previous page button even on page 0.
+     */
+    public void setAlwaysShowPrevButton(boolean alwaysShow) {
+        this.alwaysShowPrevButton = alwaysShow;
+    }
+
+    /**
+     * Whether to always show the next page button even on the last page.
+     */
+    public void setAlwaysShowNextButton(boolean alwaysShow) {
+        this.alwaysShowNextButton = alwaysShow;
     }
 
     public void setPageInfo(int slot, GuiItem infoItem) {
@@ -126,21 +190,12 @@ public class PagedGui extends BaseGui {
         this.previousPageSlot = size - 9;
         this.nextPageSlot = size - 1;
 
-        this.previousPageItem = new GuiItem(new ItemBuilder(Material.ARROW)
-                .setDisplayName("&aPágina anterior"), event -> {
-            if (page > 0) {
-                page--;
-                updatePage();
-            }
-        });
+        // Usar setPreviousPageItem/setNextPageItem para que se auto-wire el action de navegación
+        setPreviousPageItem(new GuiItem(new ItemBuilder(Material.ARROW)
+                .setDisplayName("&aPágina anterior")));
 
-        this.nextPageItem = new GuiItem(new ItemBuilder(Material.ARROW)
-                .setDisplayName("&aPágina siguiente"), event -> {
-            if (page < maxPage) {
-                page++;
-                updatePage();
-            }
-        });
+        setNextPageItem(new GuiItem(new ItemBuilder(Material.ARROW)
+                .setDisplayName("&aPágina siguiente")));
 
         this.pageInfoSlot = size - 5;
         this.pageInfoItem = new GuiItem(player -> {
@@ -204,8 +259,9 @@ public class PagedGui extends BaseGui {
     }
 
     public void updatePage() {
-        // Clear content slots
+        // Clear content slots — but respect any InputSlot registered on the same slot
         for (int slot : contentSlots) {
+            if (inputSlots.containsKey(slot)) continue;
             inventory.setItem(slot, null);
             items.remove(slot);
         }
@@ -229,7 +285,7 @@ public class PagedGui extends BaseGui {
 
     private void updateNavigationButtons() {
         if (previousPageSlot != -1 && previousPageItem != null) {
-            if (page > 0) {
+            if (page > 0 || alwaysShowPrevButton) {
                 setItem(previousPageSlot, previousPageItem);
             } else {
                 inventory.setItem(previousPageSlot, null);
@@ -238,7 +294,7 @@ public class PagedGui extends BaseGui {
         }
 
         if (nextPageSlot != -1 && nextPageItem != null) {
-            if (page < maxPage) {
+            if (page < maxPage || alwaysShowNextButton) {
                 setItem(nextPageSlot, nextPageItem);
             } else {
                 inventory.setItem(nextPageSlot, null);
@@ -455,28 +511,21 @@ public class PagedGui extends BaseGui {
 
                 gui.setContentSlots(contentSlotsList.stream().mapToInt(Integer::intValue).toArray());
 
-                // Set up navigation
-                final int finalPrevSlot = prevSlot;
-                final int finalNextSlot = nextSlot;
-
+                // Set up navigation — usar los métodos públicos para que el action se auto-wire
                 if (prevSlot != -1) {
                     GuiItem prev = prevPageItem != null ? prevPageItem :
                             new GuiItem(new ItemBuilder(Material.ARROW)
-                                    .setDisplayName("&aPágina anterior"), event -> {
-                                gui.previousPage();
-                            });
-                    gui.previousPageSlot = finalPrevSlot;
-                    gui.previousPageItem = prev;
+                                    .setDisplayName("&aPágina anterior"));
+                    gui.previousPageSlot = prevSlot;
+                    gui.setPreviousPageItem(prev);
                 }
 
                 if (nextSlot != -1) {
                     GuiItem next = nextPageItem != null ? nextPageItem :
                             new GuiItem(new ItemBuilder(Material.ARROW)
-                                    .setDisplayName("&aPágina siguiente"), event -> {
-                                gui.nextPage();
-                            });
-                    gui.nextPageSlot = finalNextSlot;
-                    gui.nextPageItem = next;
+                                    .setDisplayName("&aPágina siguiente"));
+                    gui.nextPageSlot = nextSlot;
+                    gui.setNextPageItem(next);
                 }
 
                 if (infoSlot != -1) {

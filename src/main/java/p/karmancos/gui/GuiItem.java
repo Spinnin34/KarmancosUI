@@ -81,6 +81,13 @@ public class GuiItem {
     }
 
     /**
+     * Get the default click action (may be null).
+     */
+    public Consumer<InventoryClickEvent> getAction() {
+        return this.action;
+    }
+
+    /**
      * Set click sound.
      */
     public GuiItem setClickSound(Sound sound) {

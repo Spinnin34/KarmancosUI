@@ -4,6 +4,7 @@ import net.kyori.adventure.text.Component;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import p.karmancos.gui.bedrock.BedrockFormOptions;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,8 +49,11 @@ public class TabGui extends BaseGui {
      * Add a tab with GUI and icon
      */
     public void addTab(int index, BaseGui gui, GuiItem icon, String name) {
+        if (index < 0 || gui == null) {
+            return;
+        }
         tabs.put(index, gui);
-        tabNames.put(index, name);
+        tabNames.put(index, name == null ? "Tab " + (index + 1) : name);
 
         while (tabIcons.size() <= index) {
             tabIcons.add(null);
@@ -104,15 +108,19 @@ public class TabGui extends BaseGui {
     }
 
     public void setTabSlots(int... slots) {
-        this.tabSlots = slots;
+        this.tabSlots = slots == null ? new int[0] : slots.clone();
     }
 
     public void setSelectedTabMaterial(Material material) {
-        this.selectedTabMaterial = material;
+        if (material != null) {
+            this.selectedTabMaterial = material;
+        }
     }
 
     public void setUnselectedTabMaterial(Material material) {
-        this.unselectedTabMaterial = material;
+        if (material != null) {
+            this.unselectedTabMaterial = material;
+        }
     }
 
     public void setCloseOnTabSwitch(boolean close) {
@@ -122,6 +130,27 @@ public class TabGui extends BaseGui {
     @Override
     public void open(Player player) {
         openTab(player, currentTab);
+    }
+
+    @Override
+    public void openAdaptive(Player player, BedrockFormOptions options) {
+        BaseGui gui = tabs.get(currentTab);
+        if (gui == null) {
+            open(player);
+            return;
+        }
+        updateTabButtons(gui, player);
+        gui.openAdaptive(player, options);
+    }
+
+    @Override
+    public boolean tryOpenBedrockForm(Player player, BedrockFormOptions options) {
+        BaseGui gui = tabs.get(currentTab);
+        if (gui == null) {
+            return false;
+        }
+        updateTabButtons(gui, player);
+        return gui.tryOpenBedrockForm(player, options);
     }
 
     /**
@@ -182,7 +211,12 @@ public class TabGui extends BaseGui {
                 final int targetTab = i;
 
                 // Create tab button
-                ItemStack baseItem = icon.getItemStack(player);
+                ItemStack baseItem;
+                try {
+                    baseItem = icon.getItemStack(player);
+                } catch (RuntimeException ex) {
+                    baseItem = null;
+                }
                 Material tabMaterial = (i == currentTab) ? selectedTabMaterial : unselectedTabMaterial;
 
                 ItemBuilder builder = new ItemBuilder(baseItem != null ? baseItem : new ItemStack(tabMaterial));
@@ -200,6 +234,15 @@ public class TabGui extends BaseGui {
                 GuiItem tabButton = new GuiItem(builder.build(), event -> {
                     if (targetTab != currentTab) {
                         openTab(player, targetTab);
+                    }
+                }).onBedrockClick(bedrockPlayer -> {
+                    if (targetTab != currentTab) {
+                        currentTab = targetTab;
+                    }
+                    BaseGui targetGui = tabs.get(targetTab);
+                    if (targetGui != null) {
+                        updateTabButtons(targetGui, bedrockPlayer);
+                        targetGui.openAdaptive(bedrockPlayer);
                     }
                 });
 

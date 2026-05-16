@@ -19,6 +19,9 @@ public class ColorTranslator {
     private static final Pattern removeAllDecimalsPattern = Pattern.compile("%!REMOVE_ALL_DECIMALS:(\\d+\\.?\\d*)!%");
 
     public static String toMM(String str) {
+        if (str == null) {
+            return "";
+        }
         str = str.replace("§", "&");
 
         if (str.contains("&#")) {
@@ -60,6 +63,9 @@ public class ColorTranslator {
     }
 
     public static String replaceStandardPlaceholders(String message) {
+        if (message == null) {
+            return "";
+        }
         Matcher matcher = removeUnusedDecimalsPattern.matcher(message);
         while (matcher.find()) {
             String number = matcher.group(1);

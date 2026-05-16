@@ -11,6 +11,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
+import p.karmancos.gui.bedrock.BedrockFormOptions;
+import p.karmancos.gui.bedrock.BedrockFormService;
 import p.karmancos.gui.utils.ColorTranslator;
 
 import java.util.*;
@@ -145,6 +147,13 @@ public abstract class BaseGui implements InventoryHolder {
      */
     public GuiItem getItem(int slot) {
         return items.get(slot);
+    }
+
+    /**
+     * Return an immutable view of the regular GUI items, indexed by inventory slot.
+     */
+    public Map<Integer, GuiItem> getItems() {
+        return Collections.unmodifiableMap(items);
     }
 
     /**
@@ -382,6 +391,56 @@ public abstract class BaseGui implements InventoryHolder {
         if (autoUpdate && updateTask == null) {
             startAutoUpdate();
         }
+    }
+
+    /**
+     * Open as a Bedrock form when the player is detected as Bedrock, otherwise
+     * open the regular Java inventory.
+     */
+    public void openAdaptive(Player player) {
+        openAdaptive(player, BedrockFormOptions.defaults());
+    }
+
+    /**
+     * Open as a Bedrock form with custom translation options when possible,
+     * otherwise open the regular Java inventory.
+     */
+    public void openAdaptive(Player player, BedrockFormOptions options) {
+        if (player == null) {
+            return;
+        }
+        if (!tryOpenBedrockForm(player, options)) {
+            open(player);
+        }
+    }
+
+    /**
+     * Try to open this GUI as a Bedrock SimpleForm.
+     *
+     * @return true when a form was sent through Geyser/Floodgate
+     */
+    public boolean tryOpenBedrockForm(Player player) {
+        return tryOpenBedrockForm(player, BedrockFormOptions.defaults());
+    }
+
+    /**
+     * Try to open this GUI as a Bedrock SimpleForm with custom translation options.
+     *
+     * @return true when a form was sent through Geyser/Floodgate
+     */
+    public boolean tryOpenBedrockForm(Player player, BedrockFormOptions options) {
+        if (player == null) {
+            return false;
+        }
+        prepareForBedrockForm(player);
+        return BedrockFormService.open(this, player, options);
+    }
+
+    /**
+     * Hook for dynamic GUI implementations that need to render their current
+     * state before being translated into a Bedrock form.
+     */
+    protected void prepareForBedrockForm(Player player) {
     }
 
     /**

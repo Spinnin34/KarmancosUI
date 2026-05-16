@@ -21,6 +21,7 @@ public class GuiItem {
     private Sound clickSound;
     private float clickSoundVolume = 1.0f;
     private float clickSoundPitch = 1.0f;
+    private Consumer<Player> bedrockAction;
     private long cooldownMs = 0;
     private final Map<String, Long> lastClick = new HashMap<>();
 
@@ -88,6 +89,41 @@ public class GuiItem {
     }
 
     /**
+     * Set an action that can be executed from a Bedrock form.
+     * <p>
+     * Bedrock forms do not create Bukkit InventoryClickEvent instances, so
+     * callbacks that need only the Player should be registered here.
+     */
+    public GuiItem onBedrockClick(Consumer<Player> action) {
+        this.bedrockAction = action;
+        return this;
+    }
+
+    /**
+     * Get the Bedrock form action, or null when this item only supports Java inventory clicks.
+     */
+    public Consumer<Player> getBedrockAction() {
+        return bedrockAction;
+    }
+
+    /**
+     * Execute the Bedrock form action if one is registered.
+     *
+     * @return true if an action was executed
+     */
+    public boolean handleBedrockClick(Player player) {
+        if (bedrockAction == null || player == null) {
+            return false;
+        }
+        if (!passesCooldown(player)) {
+            return true;
+        }
+        playClickSound(player);
+        bedrockAction.accept(player);
+        return true;
+    }
+
+    /**
      * Set click sound.
      */
     public GuiItem setClickSound(Sound sound) {
@@ -119,21 +155,11 @@ public class GuiItem {
     public void handleClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
-        // Cooldown check
-        if (cooldownMs > 0) {
-            String key = player.getUniqueId().toString();
-            long now = System.currentTimeMillis();
-            Long last = lastClick.get(key);
-            if (last != null && (now - last) < cooldownMs) {
-                return;
-            }
-            lastClick.put(key, now);
+        if (!passesCooldown(player)) {
+            return;
         }
 
-        // Play sound
-        if (clickSound != null) {
-            player.playSound(player.getLocation(), clickSound, clickSoundVolume, clickSoundPitch);
-        }
+        playClickSound(player);
 
         // Try specific click type action first
         ClickType clickType = event.getClick();
@@ -146,6 +172,26 @@ public class GuiItem {
         // Fallback to default action
         if (action != null) {
             action.accept(event);
+        }
+    }
+
+    private boolean passesCooldown(Player player) {
+        if (cooldownMs <= 0) {
+            return true;
+        }
+        String key = player.getUniqueId().toString();
+        long now = System.currentTimeMillis();
+        Long last = lastClick.get(key);
+        if (last != null && (now - last) < cooldownMs) {
+            return false;
+        }
+        lastClick.put(key, now);
+        return true;
+    }
+
+    private void playClickSound(Player player) {
+        if (clickSound != null) {
+            player.playSound(player.getLocation(), clickSound, clickSoundVolume, clickSoundPitch);
         }
     }
 }

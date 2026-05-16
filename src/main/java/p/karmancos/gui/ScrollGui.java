@@ -24,28 +24,16 @@ public class ScrollGui extends BaseGui {
     public ScrollGui(int rows, Component title) {
         super(rows, title);
         this.allItems = new ArrayList<>();
-
-        // Default content slots (all except right column)
-        List<Integer> slots = new ArrayList<>();
-        for (int i = 0; i < rows; i++) {
-            for (int j = 0; j < 8; j++) {
-                slots.add(i * 9 + j);
-            }
-        }
-        this.contentSlots = slots.stream().mapToInt(j -> j).toArray();
-        this.itemsPerPage = contentSlots.length;
-
-        // Default scroll bar (right column)
-        scrollBarSlots = new int[rows];
-        for (int i = 0; i < rows; i++) {
-            scrollBarSlots[i] = i * 9 + 8;
-        }
+        initDefaults(rows);
     }
 
     public ScrollGui(int rows, String title) {
         super(rows, title);
         this.allItems = new ArrayList<>();
+        initDefaults(rows);
+    }
 
+    private void initDefaults(int rows) {
         // Default content slots (all except right column)
         List<Integer> slots = new ArrayList<>();
         for (int i = 0; i < rows; i++) {
@@ -56,32 +44,49 @@ public class ScrollGui extends BaseGui {
         this.contentSlots = slots.stream().mapToInt(i -> i).toArray();
         this.itemsPerPage = contentSlots.length;
 
-        // Default scroll bar slots (right column)
+        // Default scroll bar slots (right column, excluding controls when possible)
         List<Integer> barSlots = new ArrayList<>();
-        for (int i = 1; i < rows - 1; i++) {
+        int start = rows > 2 ? 1 : 0;
+        int end = rows > 2 ? rows - 1 : rows;
+        for (int i = start; i < end; i++) {
             barSlots.add(i * 9 + 8);
         }
         this.scrollBarSlots = barSlots.stream().mapToInt(i -> i).toArray();
     }
 
     public void addContent(GuiItem item) {
-        allItems.add(item);
+        if (item != null) {
+            allItems.add(item);
+            clampScroll();
+            if (!viewers.isEmpty()) {
+                updateScroll();
+            }
+        }
     }
 
     public void setContent(List<GuiItem> items) {
         allItems.clear();
-        allItems.addAll(items);
+        if (items != null) {
+            allItems.addAll(items);
+        }
         scroll = 0; // Reset scroll when content changes
+        if (!viewers.isEmpty()) {
+            updateScroll();
+        }
     }
 
     public void clearContent() {
         allItems.clear();
         scroll = 0;
+        if (!viewers.isEmpty()) {
+            updateScroll();
+        }
     }
 
     public void setContentSlots(int... slots) {
-        this.contentSlots = slots;
-        this.itemsPerPage = slots.length;
+        this.contentSlots = slots == null ? new int[0] : slots;
+        this.itemsPerPage = this.contentSlots.length;
+        clampScroll();
     }
 
     public void setScrollStep(int step) {
@@ -96,7 +101,7 @@ public class ScrollGui extends BaseGui {
     }
 
     public void setScrollBar(int[] barSlots, GuiItem barItem) {
-        this.scrollBarSlots = barSlots;
+        this.scrollBarSlots = barSlots == null ? new int[0] : barSlots.clone();
         this.scrollBarItem = barItem;
     }
 
@@ -108,11 +113,17 @@ public class ScrollGui extends BaseGui {
         this.scrollUpItem = new GuiItem(new ItemBuilder(Material.ARROW)
                 .setDisplayName("&aDesplazar arriba"), event -> {
             scrollUp();
+        }).onBedrockClick(player -> {
+            scrollUp();
+            tryOpenBedrockForm(player);
         });
 
         this.scrollDownItem = new GuiItem(new ItemBuilder(Material.ARROW)
                 .setDisplayName("&aDesplazar abajo"), event -> {
             scrollDown();
+        }).onBedrockClick(player -> {
+            scrollDown();
+            tryOpenBedrockForm(player);
         });
 
         this.scrollBarItem = new GuiItem(new ItemBuilder(Material.GRAY_STAINED_GLASS_PANE)
@@ -161,6 +172,9 @@ public class ScrollGui extends BaseGui {
      * Get max scroll position
      */
     public int getMaxScroll() {
+        if (itemsPerPage <= 0) {
+            return 0;
+        }
         return Math.max(0, allItems.size() - itemsPerPage);
     }
 
@@ -171,8 +185,10 @@ public class ScrollGui extends BaseGui {
     }
 
     public void updateScroll() {
+        clampScroll();
         // Clear content slots
         for (int slot : contentSlots) {
+            if (inputSlots.containsKey(slot)) continue;
             inventory.setItem(slot, null);
             items.remove(slot);
         }
@@ -220,6 +236,7 @@ public class ScrollGui extends BaseGui {
 
         // Clear scroll bar
         for (int slot : scrollBarSlots) {
+            if (inputSlots.containsKey(slot)) continue;
             inventory.setItem(slot, null);
             items.remove(slot);
         }
@@ -244,6 +261,15 @@ public class ScrollGui extends BaseGui {
                 setItem(scrollBarSlots[i], scrollBarItem);
             }
         }
+    }
+
+    @Override
+    protected void prepareForBedrockForm(Player player) {
+        updateScroll();
+    }
+
+    private void clampScroll() {
+        scroll = Math.max(0, Math.min(scroll, getMaxScroll()));
     }
 }
 

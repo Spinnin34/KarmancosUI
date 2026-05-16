@@ -204,15 +204,36 @@ public class PagedGui extends BaseGui {
     private void wireNavigationAction(GuiItem item, boolean previous) {
         if (item == null) return;
         Consumer<InventoryClickEvent> originalAction = item.getAction();
+        Consumer<Player> originalBedrockAction = item.getBedrockAction();
         if (previous) {
             item.onClick(event -> {
+                int pageBeforeAction = page;
                 if (originalAction != null) originalAction.accept(event);
+                if (page != pageBeforeAction) return;
                 previousPage();
+            });
+            item.onBedrockClick(player -> {
+                int pageBeforeAction = page;
+                if (originalBedrockAction != null) originalBedrockAction.accept(player);
+                if (page == pageBeforeAction) {
+                    previousPage();
+                }
+                tryOpenBedrockForm(player);
             });
         } else {
             item.onClick(event -> {
+                int pageBeforeAction = page;
                 if (originalAction != null) originalAction.accept(event);
+                if (page != pageBeforeAction) return;
                 nextPage();
+            });
+            item.onBedrockClick(player -> {
+                int pageBeforeAction = page;
+                if (originalBedrockAction != null) originalBedrockAction.accept(player);
+                if (page == pageBeforeAction) {
+                    nextPage();
+                }
+                tryOpenBedrockForm(player);
             });
         }
     }
@@ -332,6 +353,11 @@ public class PagedGui extends BaseGui {
         super.open(player);
     }
 
+    @Override
+    protected void prepareForBedrockForm(Player player) {
+        updatePage();
+    }
+
     /**
      * Re-render the current page: content slots, navigation buttons, and page info.
      */
@@ -357,6 +383,12 @@ public class PagedGui extends BaseGui {
 
         // ── 4. Update page info item ─────────────────────────────────────
         updatePageInfoItem();
+
+        // Re-render per-viewer providers (e.g. PlaceholderAPI) after page changes.
+        // BaseGui#setItem initially resolves with null player, so we refresh while open.
+        if (!viewers.isEmpty()) {
+            update();
+        }
     }
 
     private void updateNavigationButtons() {

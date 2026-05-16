@@ -84,7 +84,7 @@ public class VirtualInventory extends BaseGui {
     public void handleClick(InventoryClickEvent event) {
         if (event.getClickedInventory() == inventory) {
             int slot = event.getSlot();
-            ItemStack clicked = event.getCurrentItem();
+            ItemStack clicked = cloneOrNull(event.getCurrentItem());
             ItemStack cursor = event.getCursor();
 
             // Check filter
@@ -106,24 +106,29 @@ public class VirtualInventory extends BaseGui {
             Plugin p = getPlugin();
             if (p == null) return;
             Bukkit.getScheduler().runTaskLater(p, () -> {
-                ItemStack newItem = inventory.getItem(slot);
+                ItemStack newItem = cloneOrNull(inventory.getItem(slot));
+                int slotMaxStack = maxStackSizes.getOrDefault(slot, defaultMaxStackSize);
+                if (newItem != null && newItem.getAmount() > slotMaxStack) {
+                    newItem.setAmount(slotMaxStack);
+                    inventory.setItem(slot, newItem.clone());
+                }
 
                 if (clicked != null && !clicked.getType().isAir() &&
                     (newItem == null || newItem.getType().isAir())) {
                     // Item removed
                     if (onItemRemove != null && event.getWhoClicked() instanceof Player) {
-                        onItemRemove.accept((Player) event.getWhoClicked(), clicked);
+                        onItemRemove.accept((Player) event.getWhoClicked(), clicked.clone());
                     }
                 } else if ((clicked == null || clicked.getType().isAir()) &&
                            newItem != null && !newItem.getType().isAir()) {
                     // Item added
                     if (onItemAdd != null && event.getWhoClicked() instanceof Player) {
-                        onItemAdd.accept((Player) event.getWhoClicked(), newItem);
+                        onItemAdd.accept((Player) event.getWhoClicked(), newItem.clone());
                     }
                 }
 
                 // Update stored items
-                storedItems.put(slot, newItem);
+                putStoredItem(slot, newItem);
 
                 if (autoSort) {
                     sortInventory();
@@ -165,6 +170,7 @@ public class VirtualInventory extends BaseGui {
 
         // Clear inventory
         inventory.clear();
+        storedItems.clear();
 
         // Re-add sorted items
         int slot = 0;
@@ -178,7 +184,7 @@ public class VirtualInventory extends BaseGui {
                 stack.setAmount(stackSize);
 
                 inventory.setItem(slot, stack);
-                storedItems.put(slot, stack);
+                putStoredItem(slot, stack);
 
                 amount -= stackSize;
                 slot++;
@@ -195,10 +201,7 @@ public class VirtualInventory extends BaseGui {
 
         Map<Integer, ItemStack> leftover = inventory.addItem(item);
 
-        // Update stored items
-        for (int i = 0; i < inventory.getSize(); i++) {
-            storedItems.put(i, inventory.getItem(i));
-        }
+        syncStoredItems();
 
         return leftover.isEmpty();
     }
@@ -211,10 +214,7 @@ public class VirtualInventory extends BaseGui {
 
         Map<Integer, ItemStack> leftover = inventory.removeItem(item);
 
-        // Update stored items
-        for (int i = 0; i < inventory.getSize(); i++) {
-            storedItems.put(i, inventory.getItem(i));
-        }
+        syncStoredItems();
 
         return leftover.isEmpty();
     }
@@ -230,6 +230,9 @@ public class VirtualInventory extends BaseGui {
      * Count specific item in inventory
      */
     public int count(ItemStack item) {
+        if (item == null || item.getType().isAir()) {
+            return 0;
+        }
         int count = 0;
         for (ItemStack stored : inventory.getContents()) {
             if (stored != null && stored.isSimilar(item)) {
@@ -265,9 +268,7 @@ public class VirtualInventory extends BaseGui {
     public void handleClose(InventoryCloseEvent event) {
         super.handleClose(event);
         // Save items to map
-        for (int i = 0; i < inventory.getSize(); i++) {
-            storedItems.put(i, inventory.getItem(i));
-        }
+        syncStoredItems();
     }
 
     @Override
@@ -275,7 +276,7 @@ public class VirtualInventory extends BaseGui {
         super.handleOpen(event);
         // Restore items
         for (Map.Entry<Integer, ItemStack> entry : storedItems.entrySet()) {
-            inventory.setItem(entry.getKey(), entry.getValue());
+            inventory.setItem(entry.getKey(), cloneOrNull(entry.getValue()));
         }
     }
 
@@ -285,18 +286,45 @@ public class VirtualInventory extends BaseGui {
     public Map<Integer, ItemStack> getStoredItems() {
         // Update from current inventory state if open
         if (!viewers.isEmpty()) {
-            for (int i = 0; i < inventory.getSize(); i++) {
-                storedItems.put(i, inventory.getItem(i));
-            }
+            syncStoredItems();
         }
-        return new HashMap<>(storedItems);
+        Map<Integer, ItemStack> copy = new HashMap<>();
+        for (Map.Entry<Integer, ItemStack> entry : storedItems.entrySet()) {
+            copy.put(entry.getKey(), cloneOrNull(entry.getValue()));
+        }
+        return copy;
     }
 
     /**
      * Get all items as array
      */
     public ItemStack[] getContents() {
-        return inventory.getContents();
+        ItemStack[] contents = inventory.getContents();
+        ItemStack[] copy = new ItemStack[contents.length];
+        for (int i = 0; i < contents.length; i++) {
+            copy[i] = cloneOrNull(contents[i]);
+        }
+        return copy;
+    }
+
+    private void syncStoredItems() {
+        storedItems.clear();
+        for (int i = 0; i < inventory.getSize(); i++) {
+            putStoredItem(i, inventory.getItem(i));
+        }
+    }
+
+    private void putStoredItem(int slot, ItemStack item) {
+        ItemStack copy = cloneOrNull(item);
+        if (copy == null) {
+            storedItems.remove(slot);
+        } else {
+            storedItems.put(slot, copy);
+        }
+    }
+
+    private ItemStack cloneOrNull(ItemStack item) {
+        return item != null && !item.getType().isAir() ? item.clone() : null;
     }
 }
 

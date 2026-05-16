@@ -3,18 +3,18 @@ package p.karmancos.gui;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Advanced ItemProvider with caching and localization support
  */
 public abstract class CachedItemProvider implements ItemProvider {
 
-    private final Map<String, ItemStack> cache = new HashMap<>();
+    private final Map<String, ItemStack> cache = new ConcurrentHashMap<>();
     private final boolean enableCache;
     private final long cacheDuration;
-    private final Map<String, Long> cacheTimestamps = new HashMap<>();
+    private final Map<String, Long> cacheTimestamps = new ConcurrentHashMap<>();
 
     public CachedItemProvider(boolean enableCache, long cacheDurationMs) {
         this.enableCache = enableCache;
@@ -42,6 +42,11 @@ public abstract class CachedItemProvider implements ItemProvider {
         }
 
         ItemStack item = createItem(player);
+        if (item == null) {
+            cache.remove(cacheKey);
+            cacheTimestamps.remove(cacheKey);
+            return null;
+        }
         cache.put(cacheKey, item.clone());
         cacheTimestamps.put(cacheKey, currentTime);
 
